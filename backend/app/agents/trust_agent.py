@@ -3,18 +3,22 @@ suspicious_words = [
     "bypass",
     "override",
     "ignore",
+    "reveal",
+    "credentials",
+    "remove security",
+    "disable verification",
 ]
 
 
-def calculate_trust(content: str):
+def calculate_trust(query: str, content: str):
 
     trust_score = 100
 
-    lower_content = content.lower()
+    combined = f"{query} {content}".lower()
 
     for word in suspicious_words:
 
-        if word in lower_content:
+        if word in combined:
             trust_score -= 25
 
     trust_score = max(trust_score, 0)

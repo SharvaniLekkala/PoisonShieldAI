@@ -109,7 +109,10 @@ function ChatWindow() {
                             ? response.trust_score
                             : "N/A"}
                     </p>
+                    <h3>Memory Status</h3>
+                    <p>{response.memory_status}</p>
 
+                    
                     <h3>Response</h3>
                     <p>{response.response || "No response returned"}</p>
 
