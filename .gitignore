@@ -1,0 +1,16 @@
+venv/
+.venv/
+
+__pycache__/
+*.pyc
+
+node_modules/
+
+chroma_db/
+
+.env
+
+dist/
+build/
+
+.vscode/
