@@ -1,3 +1,5 @@
+import re
+
 suspicious_words = [
     "disable",
     "bypass",
@@ -7,6 +9,10 @@ suspicious_words = [
     "credentials",
     "remove security",
     "disable verification",
+    "secret",
+    "password",
+    "api key",
+    "private key",
 ]
 
 
@@ -17,9 +23,14 @@ def calculate_trust(query: str, content: str):
     combined = f"{query} {content}".lower()
 
     for word in suspicious_words:
+        if re.search(rf"\b{re.escape(word)}\b", combined):
+            trust_score -= 20
 
-        if word in combined:
-            trust_score -= 25
+    if re.search(r"\bresearch\b", combined) and re.search(r"\bmalicious\b", combined):
+        trust_score -= 15
+
+    if len(combined) > 1500:
+        trust_score -= 10
 
     trust_score = max(trust_score, 0)
 

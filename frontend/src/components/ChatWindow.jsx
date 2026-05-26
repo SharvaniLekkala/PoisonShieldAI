@@ -112,7 +112,20 @@ function ChatWindow() {
                     <h3>Memory Status</h3>
                     <p>{response.memory_status}</p>
 
-                    
+                    <h3>Retrieval Source</h3>
+                    <p>{response.retrieval_source || "N/A"}</p>
+
+                    <h3>Retrieved Documents</h3>
+                    {response.retrieved_documents ? (
+                        <ul>
+                            {response.retrieved_documents.map((doc, index) => (
+                                <li key={index}>{doc}</li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <p>No documents returned</p>
+                    )}
+
                     <h3>Response</h3>
                     <p>{response.response || "No response returned"}</p>
 
