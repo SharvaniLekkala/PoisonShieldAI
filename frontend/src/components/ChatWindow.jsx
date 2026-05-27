@@ -1,143 +1,191 @@
 import { useState } from "react";
+
 import API from "../services/api";
 
-function ChatWindow() {
+import {
+  Link
+} from "react-router-dom";
 
-    const [message, setMessage] = useState("");
-    const [response, setResponse] = useState(null);
-    const [loading, setLoading] = useState(false);
 
-    const sendMessage = async () => {
+export default function ChatWindow() {
 
-        if (!message.trim()) {
-            alert("Please enter a message");
-            return;
+  const [message, setMessage] = useState("");
+
+  const [response, setResponse] = useState(() => {
+
+  const saved = localStorage.getItem(
+    "latest_response"
+  );
+
+  return saved ? JSON.parse(saved) : null;
+});
+
+  const [loading, setLoading] = useState(false);
+
+
+  const sendMessage = async () => {
+
+    if (!message.trim()) return;
+
+    setLoading(true);
+
+    try {
+
+      const res = await API.post(
+        "/chat",
+        {
+          message
         }
+      );
 
-        setLoading(true);
+      setResponse(res.data);
 
-        try {
+      // Store response globally
+      localStorage.setItem(
+        "latest_response",
+        JSON.stringify(res.data)
+      );
 
-            const res = await API.post("/chat", {
-                message: message
-            });
+    } catch (error) {
 
-            console.log("Backend Response:", res.data);
+      console.error(error);
 
-            setResponse(res.data);
+      setResponse({
+        response:
+          "Backend connection failed."
+      });
 
-        } catch (error) {
+    } finally {
 
-            console.error("Connection Error:", error);
+      setLoading(false);
+    }
+  };
 
-            alert("Backend connection failed");
 
-        } finally {
+  return (
 
-            setLoading(false);
-        }
-    };
+    <div
+      style={{
+        maxWidth: "900px",
+        margin: "40px auto",
+        padding: "20px",
+        fontFamily: "Arial",
+        color: "#111827",
+        background: "#ffffff",
+        minHeight: "100vh"
+      }}
+    >
 
-    return (
+      <h1
+        style={{
+          textAlign: "center",
+          marginBottom: "30px",
+          color: "#111827"
+        }}
+      >
+        PoisonShield AI
+      </h1>
+
+
+      {/* INPUT */}
+      <div
+        style={{
+          display: "flex",
+          gap: "10px"
+        }}
+      >
+
+        <input
+          type="text"
+          placeholder="Ask something..."
+          value={message}
+          onChange={(e) =>
+            setMessage(e.target.value)
+          }
+          style={{
+            flex: 1,
+            padding: "14px",
+            borderRadius: "10px",
+            border: "1px solid #171111",
+            fontSize: "16px",
+            color: "#111827",
+            background: "#ffffff"
+          }}
+        />
+
+        <button
+          onClick={sendMessage}
+          disabled={loading}
+          style={{
+            padding: "14px 22px",
+            borderRadius: "10px",
+            border: "none",
+            background: "#111827",
+            color: "#ffffff",
+            cursor: "pointer",
+            fontWeight: "bold"
+          }}
+        >
+          {loading
+            ? "Loading..."
+            : "Send"}
+        </button>
+
+      </div>
+
+
+      {/* RESPONSE */}
+      {response && (
 
         <div
-            style={{
-                padding: "30px",
-                fontFamily: "Arial"
-            }}
+          style={{
+            marginTop: "30px",
+            padding: "25px",
+            borderRadius: "16px",
+            border: "1px solid #ddd",
+            background: "#f9fafb",
+            boxShadow:
+              "0 4px 12px rgba(0,0,0,0.06)"
+          }}
         >
 
-            <h1>PoisonShield AI</h1>
+          <h2
+            style={{
+              color: "#111827"
+            }}
+          >
+            Response
+          </h2>
 
-            <div
-                style={{
-                    marginTop: "20px"
-                }}
-            >
+          <p
+            style={{
+              lineHeight: "1.7",
+              fontSize: "16px",
+              whiteSpace: "pre-wrap",
+              color: "#111827"
+            }}
+          >
+            {response.response}
+          </p>
 
-                <input
-                    type="text"
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    placeholder="Enter query..."
-                    style={{
-                        width: "400px",
-                        padding: "10px",
-                        fontSize: "16px"
-                    }}
-                />
 
-                <button
-                    onClick={sendMessage}
-                    style={{
-                        marginLeft: "10px",
-                        padding: "10px 20px",
-                        cursor: "pointer"
-                    }}
-                >
-                    Send
-                </button>
-
-            </div>
-
-            {loading && (
-                <p style={{ marginTop: "20px" }}>
-                    Loading...
-                </p>
-            )}
-
-            {response && (
-
-                <div
-                    style={{
-                        marginTop: "30px",
-                        border: "1px solid #ccc",
-                        padding: "20px",
-                        borderRadius: "10px",
-                        width: "600px"
-                    }}
-                >
-
-                    <h2>Response Details</h2>
-
-                    <h3>Status</h3>
-                    <p>{response.status || "N/A"}</p>
-
-                    <h3>Trust Score</h3>
-                    <p>
-                        {response.trust_score !== undefined
-                            ? response.trust_score
-                            : "N/A"}
-                    </p>
-                    <h3>Memory Status</h3>
-                    <p>{response.memory_status}</p>
-
-                    <h3>Retrieval Source</h3>
-                    <p>{response.retrieval_source || "N/A"}</p>
-
-                    <h3>Retrieved Documents</h3>
-                    {response.retrieved_documents ? (
-                        <ul>
-                            {response.retrieved_documents.map((doc, index) => (
-                                <li key={index}>{doc}</li>
-                            ))}
-                        </ul>
-                    ) : (
-                        <p>No documents returned</p>
-                    )}
-
-                    <h3>Response</h3>
-                    <p>{response.response || "No response returned"}</p>
-
-                    <h3>Reason</h3>
-                    <p>{response.reason || "No issues detected"}</p>
-
-                </div>
-
-            )}
+          <Link
+            to="/details"
+            style={{
+              display: "inline-block",
+              marginTop: "20px",
+              textDecoration: "none",
+              color: "#2563eb",
+              fontWeight: "bold"
+            }}
+          >
+            View Workflow Details 
+          </Link>
 
         </div>
-    );
-}
 
-export default ChatWindow;
+      )}
+
+    </div>
+  );
+}

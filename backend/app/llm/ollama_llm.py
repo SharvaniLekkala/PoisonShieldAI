@@ -1,5 +1,7 @@
 from langchain_ollama import OllamaLLM
 
+
 llm = OllamaLLM(
-    model="tinyllama"
+    model="tinyllama",
+    temperature=0
 )

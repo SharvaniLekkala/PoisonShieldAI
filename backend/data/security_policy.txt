@@ -1,0 +1,13 @@
+All employees must use multi-factor authentication.
+
+Passwords must be changed every 90 days.
+
+Internal API keys are encrypted before storage.
+
+Production deployments require security approval.
+
+Unauthorized access attempts are logged and monitored.
+
+Sensitive customer data must never be exposed publicly.
+
+HTTPS must be used for all enterprise communications.

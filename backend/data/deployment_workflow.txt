@@ -1,0 +1,11 @@
+Deployment workflow follows a secure CI/CD pipeline.
+
+Code changes require peer review before merging.
+
+Production deployment requires approval from senior engineers.
+
+Rollback procedures must be available before deployment.
+
+All deployments are monitored for anomalies.
+
+Only verified containers can be deployed to production.

@@ -1,0 +1,9 @@
+Employees are required to complete annual security training.
+
+Remote access requires VPN authentication.
+
+Sharing confidential company information is prohibited.
+
+Personal devices must comply with company security standards.
+
+Access permissions are reviewed every quarter.
