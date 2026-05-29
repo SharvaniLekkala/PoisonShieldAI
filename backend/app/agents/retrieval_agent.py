@@ -10,16 +10,16 @@ def retrieve_data(query: str):
     try:
 
         results = vector_store.similarity_search_with_score(
-            query,
-            k=5
-        )
+        query,
+        k=5
+    )
 
         filtered_docs = []
 
         for doc, score in results:
 
             # Lower score = better match
-            if score < 2:
+            if score < 1.65:
                 filtered_docs.append(doc)
 
         if filtered_docs:

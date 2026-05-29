@@ -3,7 +3,7 @@ from pathlib import Path
 from langchain_core.documents import Document
 
 from app.memory.chroma_store import vector_store
-
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 # IMPORTANT
 # Go from app/memory -> backend/data
@@ -16,7 +16,10 @@ def ingest_documents():
     print("Looking inside:", DATA_PATH)
 
     documents = []
-
+    splitter = RecursiveCharacterTextSplitter(
+    chunk_size=500,
+    chunk_overlap=100
+)
     txt_files = list(DATA_PATH.glob("*.txt"))
 
     print("TXT FILES FOUND:", len(txt_files))
@@ -33,14 +36,18 @@ def ingest_documents():
 
                 print("Characters:", len(content))
 
-                documents.append(
-                    Document(
-                        page_content=content,
-                        metadata={
-                            "source": file_path.name
-                        }
+                chunks = splitter.split_text(content)
+
+                for chunk in chunks:
+
+                    documents.append(
+                        Document(
+                            page_content=chunk,
+                            metadata={
+                                "source": file_path.name
+                            }
+                        )
                     )
-                )
 
         except Exception as e:
             print("ERROR READING FILE:", e)

@@ -79,49 +79,17 @@ def retrieval_node(state: GraphState) -> GraphState:
 
     docs = retrieval_result["documents"]
 
-    query_words = (
-        state["sanitized_query"]
-        .lower()
-        .split()
-    )
+    docs = retrieval_result["documents"]
 
-    relevant_lines = []
-
-    # Extract ONLY relevant lines
-    for doc in docs:
-
-        lines = doc.split(".")
-
-        for line in lines:
-
-            line = line.strip()
-
-            if not line:
-                continue
-
-            line_lower = line.lower()
-
-            matches = sum(
-                1 for word in query_words
-                if word in line_lower
-            )
-
-            # Keep only relevant lines
-            if matches >= 1:
-                relevant_lines.append(line)
-
-    combined_docs = ". ".join(relevant_lines)
+    combined_docs = "\n\n".join(docs)
 
     return {
         "retrieval_source": retrieval_result.get(
             "source",
             "memory"
         ),
-
-        "retrieved_documents": relevant_lines,
-
+        "retrieved_documents": docs,
         "combined_docs": combined_docs,
-
         "status": "retrieved"
     }
 
@@ -201,6 +169,7 @@ def response_node(state: GraphState) -> GraphState:
                 "I do not know based on the provided context.",
             "status": "answered"
         }
+    
 
     prompt = f"""
 Context:
@@ -213,7 +182,12 @@ Answer ONLY using the context above.
 Keep the answer short and accurate.
 Do NOT explain extra information.
 """
-
+    if not state.get("retrieved_documents"):
+        return {
+            "response":
+            "The requested information was not found in the uploaded documents.",
+            "status": "answered"
+        }
     response = llm.invoke(prompt)
 
     response = response.strip()
