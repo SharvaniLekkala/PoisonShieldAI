@@ -3,7 +3,7 @@ from typing import TypedDict
 from app.agents.validation_agent import validate_query
 from app.agents.retrieval_agent import retrieve_data
 from app.agents.sanitization_agent import sanitize_content
-from app.agents.trust_agent import calculate_trust
+
 
 from app.llm.ollama_llm import llm
 from langgraph.graph import END, START, StateGraph
@@ -18,18 +18,26 @@ class GraphState(TypedDict, total=False):
     retrieval_source: str
     retrieved_documents: list[str]
     combined_docs: str
-    trust_score: int
     sanitized_content: str
     response: str
     memory_status: str
     status: str
 
+    security_status: str
+    retrieval_quality: str
+    
+
+
+# =========================
+# VALIDATION NODE
+# =========================
 
 def validate_node(state: GraphState) -> GraphState:
 
     validation = validate_query(state["query"])
 
     if not validation["safe"]:
+
         return {
             "blocked": True,
             "status": "blocked",
@@ -45,47 +53,121 @@ def validate_node(state: GraphState) -> GraphState:
     }
 
 
+# =========================
+# SANITIZE QUERY
+# =========================
+
 def sanitize_node(state: GraphState) -> GraphState:
 
     return {
-        "sanitized_query": sanitize_content(state["query"]),
+        "sanitized_query": sanitize_content(
+            state["query"]
+        ),
         "status": "sanitized"
     }
 
 
+# =========================
+# RETRIEVAL NODE
+# =========================
+
 def retrieval_node(state: GraphState) -> GraphState:
 
-    retrieval_result = retrieve_data(state["sanitized_query"])
+    retrieval_result = retrieve_data(
+        state["sanitized_query"]
+    )
 
     docs = retrieval_result["documents"]
 
-    # Better document separation
-    combined_docs = "\n\n".join(docs)
+    query_words = (
+        state["sanitized_query"]
+        .lower()
+        .split()
+    )
+
+    relevant_lines = []
+
+    # Extract ONLY relevant lines
+    for doc in docs:
+
+        lines = doc.split(".")
+
+        for line in lines:
+
+            line = line.strip()
+
+            if not line:
+                continue
+
+            line_lower = line.lower()
+
+            matches = sum(
+                1 for word in query_words
+                if word in line_lower
+            )
+
+            # Keep only relevant lines
+            if matches >= 1:
+                relevant_lines.append(line)
+
+    combined_docs = ". ".join(relevant_lines)
 
     return {
-        "retrieval_source": retrieval_result.get("source", "static"),
-        "retrieved_documents": docs,
+        "retrieval_source": retrieval_result.get(
+            "source",
+            "memory"
+        ),
+
+        "retrieved_documents": relevant_lines,
+
         "combined_docs": combined_docs,
+
         "status": "retrieved"
     }
 
 
+# =========================
+# TRUST NODE
+# =========================
+
 def trust_node(state: GraphState) -> GraphState:
 
-    trust_score = calculate_trust(
-        state["sanitized_query"],
-        state["combined_docs"]
+    docs_count = len(
+        state.get(
+            "retrieved_documents",
+            []
+        )
     )
 
-    status = "trusted" if trust_score >= 70 else "low_trust"
+    if docs_count >= 5:
+        retrieval_quality = "HIGH"
+
+    elif docs_count >= 1:
+        retrieval_quality = "MEDIUM"
+
+    else:
+        retrieval_quality = "LOW"
+
+    security_status = (
+        "BLOCKED"
+        if state.get("blocked")
+        else "SAFE"
+    )
 
     return {
-        "trust_score": trust_score,
-        "status": status
+        "security_status": security_status,
+        "retrieval_quality": retrieval_quality,
+        "status": "trusted"
     }
 
 
-def sanitize_content_node(state: GraphState) -> GraphState:
+# =========================
+# SANITIZE CONTENT
+# =========================
+
+def sanitize_content_node(
+    state: GraphState
+) -> GraphState:
 
     return {
         "sanitized_content": sanitize_content(
@@ -95,38 +177,31 @@ def sanitize_content_node(state: GraphState) -> GraphState:
     }
 
 
+# =========================
+# RESPONSE NODE
+# =========================
+
 def response_node(state: GraphState) -> GraphState:
 
-    context = state["sanitized_content"].strip()
-    question = state["sanitized_query"].strip()
-
-    # If no context exists
-    if not context:
-        return {
-            "response": "I do not know based on the provided context.",
-            "status": "answered"
-        }
-
-    # VERY IMPORTANT:
-    # simple keyword relevance check BEFORE LLM
-
-    query_words = question.lower().split()
-
-    context_lower = context.lower()
-
-    matches = sum(
-        1 for word in query_words
-        if word in context_lower
+    context = (
+        state["sanitized_content"]
+        .strip()
     )
 
-    # If query unrelated to retrieved docs
-    if matches <= 1:
+    question = (
+        state["sanitized_query"]
+        .strip()
+    )
+
+    # No context
+    if not context:
+
         return {
-            "response": "I do not know based on the provided context.",
+            "response":
+                "I do not know based on the provided context.",
             "status": "answered"
         }
 
-    # SIMPLER PROMPT
     prompt = f"""
 Context:
 {context}
@@ -135,22 +210,18 @@ Question:
 {question}
 
 Answer ONLY using the context above.
-If answer is not in context, say:
-I do not know based on the provided context.
+Keep the answer short and accurate.
+Do NOT explain extra information.
 """
 
     response = llm.invoke(prompt)
 
-    # Extra cleanup
     response = response.strip()
 
-    # Prevent prompt leakage
     blocked_phrases = [
-        "RULES:",
         "Context:",
         "Question:",
         "Use ONLY",
-        "Never use",
         "provided context"
     ]
 
@@ -158,7 +229,10 @@ I do not know based on the provided context.
 
         if phrase.lower() in response.lower():
 
-            response = "I do not know based on the provided context."
+            response = (
+                "I do not know based on the provided context."
+            )
+
             break
 
     return {
@@ -166,54 +240,101 @@ I do not know based on the provided context.
         "status": "answered"
     }
 
-def low_trust_node(state: GraphState) -> GraphState:
+
+
+
+# =========================
+# MEMORY NODE
+# =========================
+
+def memory_node(
+    state: GraphState
+) -> GraphState:
 
     return {
-        "response": "Unable to generate a trusted response because the request did not pass security trust thresholds.",
-        "memory_status": "Memory rejected due to low trust",
-        "status": "blocked"
+        "memory_status":
+            "Memory storage disabled",
+
+        "status":
+            "memory_skipped"
     }
 
 
-# MEMORY DISABLED
-# Prevents vector DB pollution
-def memory_node(state: GraphState) -> GraphState:
-
-    return {
-        "memory_status": "Memory storage disabled",
-        "status": "memory_skipped"
-    }
-
+# =========================
+# GRAPH SETUP
+# =========================
 
 builder = StateGraph(GraphState)
 
-builder.add_node("validate_node", validate_node)
-builder.add_node("sanitize_node", sanitize_node)
-builder.add_node("retrieval_node", retrieval_node)
-builder.add_node("trust_node", trust_node)
-builder.add_node("sanitize_content_node", sanitize_content_node)
-builder.add_node("response_node", response_node)
-builder.add_node("low_trust_node", low_trust_node)
-builder.add_node("memory_node", memory_node)
+builder.add_node(
+    "validate_node",
+    validate_node
+)
 
-builder.add_edge(START, "validate_node")
+builder.add_node(
+    "sanitize_node",
+    sanitize_node
+)
+
+builder.add_node(
+    "retrieval_node",
+    retrieval_node
+)
+
+builder.add_node(
+    "trust_node",
+    trust_node
+)
+
+builder.add_node(
+    "sanitize_content_node",
+    sanitize_content_node
+)
+
+builder.add_node(
+    "response_node",
+    response_node
+)
+
+
+builder.add_node(
+    "memory_node",
+    memory_node
+)
+
+
+builder.add_edge(
+    START,
+    "validate_node"
+)
+
 
 builder.add_conditional_edges(
     "validate_node",
-    lambda state: END if state.get("blocked") else "sanitize_node"
-)
 
-builder.add_edge("sanitize_node", "retrieval_node")
-
-builder.add_edge("retrieval_node", "trust_node")
-
-builder.add_conditional_edges(
-    "trust_node",
     lambda state:
-        "low_trust_node"
-        if state.get("trust_score", 0) < 70
-        else "sanitize_content_node"
+        END
+        if state.get("blocked")
+        else "sanitize_node"
 )
+
+
+builder.add_edge(
+    "sanitize_node",
+    "retrieval_node"
+)
+
+builder.add_edge(
+    "retrieval_node",
+    "trust_node"
+)
+
+
+builder.add_edge(
+    "trust_node",
+    "sanitize_content_node"
+)
+
 
 builder.add_edge(
     "sanitize_content_node",
@@ -225,18 +346,19 @@ builder.add_edge(
     "memory_node"
 )
 
-builder.add_edge(
-    "low_trust_node",
-    "memory_node"
-)
 
 builder.add_edge(
     "memory_node",
     END
 )
 
+
 workflow_graph = builder.compile()
 
+
+# =========================
+# MAIN WORKFLOW
+# =========================
 
 def run_workflow(query: str):
 
@@ -247,60 +369,95 @@ def run_workflow(query: str):
     if result.get("blocked"):
 
         return {
+
             "status": "blocked",
-            "trust_score": result.get("trust_score", 0),
-            "memory_status": result.get(
-                "memory_status",
-                "Memory rejected due to unsafe input"
-            ),
-            "retrieval_source": result.get(
-                "retrieval_source",
-                "unknown"
-            ),
-            "retrieved_documents": result.get(
-                "retrieved_documents",
-                []
-            ),
-            "response": result.get(
-                "response",
-                "Request blocked due to security concerns."
-            ),
-            "reason": result.get(
-                "reason",
-                "Request blocked by validation."
-            )
+
+            "security_status":
+                result.get(
+                    "security_status",
+                    "BLOCKED"
+                ),
+
+            "retrieval_quality":
+                result.get(
+                    "retrieval_quality",
+                    "LOW"
+                ),
+
+            "memory_status":
+                result.get(
+                    "memory_status",
+                    "Memory rejected due to unsafe input"
+                ),
+
+            "retrieval_source":
+                result.get(
+                    "retrieval_source",
+                    "unknown"
+                ),
+
+            "retrieved_documents":
+                result.get(
+                    "retrieved_documents",
+                    []
+                ),
+
+            "response":
+                result.get(
+                    "response",
+                    "Request blocked due to security concerns."
+                ),
+
+            "reason":
+                result.get(
+                    "reason",
+                    "Request blocked by validation."
+                )
         }
 
     return {
-        "status":
-            "success"
-            if result.get("trust_score", 0) >= 70
-            else "low_trust",
 
-        "trust_score": result.get("trust_score", 0),
+        "status": "success",
 
-        "memory_status": result.get(
-            "memory_status",
-            "Memory storage disabled"
-        ),
+        "security_status":
+            result.get(
+                "security_status",
+                "SAFE"
+            ),
 
-        "retrieval_source": result.get(
-            "retrieval_source",
-            "unknown"
-        ),
+        "retrieval_quality":
+            result.get(
+                "retrieval_quality",
+                "LOW"
+            ),
 
-        "retrieved_documents": result.get(
-            "retrieved_documents",
-            []
-        ),
+        "memory_status":
+            result.get(
+                "memory_status",
+                "Memory storage disabled"
+            ),
 
-        "response": result.get(
-            "response",
-            "No response generated."
-        ),
+        "retrieval_source":
+            result.get(
+                "retrieval_source",
+                "unknown"
+            ),
 
-        "reason": result.get(
-            "reason",
-            "Query processed"
-        )
+        "retrieved_documents":
+            result.get(
+                "retrieved_documents",
+                []
+            ),
+
+        "response":
+            result.get(
+                "response",
+                "No response generated."
+            ),
+
+        "reason":
+            result.get(
+                "reason",
+                "Query processed"
+            )
     }

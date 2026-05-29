@@ -53,8 +53,18 @@ export default function Details() {
           </p>
 
           <p>
-            <strong>Trust Score:</strong>{" "}
-            {response.trust_score}
+            <strong>Security Status:</strong>{" "}
+            {response.security_status}
+          </p>
+
+          <p>
+            <strong>Retrieval Quality:</strong>{" "}
+            {response.retrieval_quality}
+          </p>
+
+          <p>
+            <strong>Documents Retrieved:</strong>{" "}
+            {response.retrieved_documents?.length || 0}
           </p>
 
           <p>
