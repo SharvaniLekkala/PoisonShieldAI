@@ -1,30 +1,38 @@
-blocked_patterns = [
-    "ignore previous instructions",
-    "reveal api keys",
-    "disable safety",
-    "bypass verification",
-    "reveal credentials",
-    "ignore all future safety rules",
-    "remove security",
-    "override the policy",
-    "follow these rules instead",
-]
+import re
 
-# Only block explicit credential extraction attempts
-sensitive_patterns = [
-    "show password",
-    "reveal password",
-    "give me password",
-    "give me passwords",
-    "dump passwords",
-    "dump credentials",
-    "show credentials",
-    "reveal credentials",
-    "show api key",
-    "reveal api key",
-    "give me api key",
-    "show private key",
-    "reveal private key",
+from app.security.attack_store import attack_store
+
+
+# ==================================================
+# REGEX ATTACK DETECTION
+# ==================================================
+
+REGEX_PATTERNS = [
+
+    # Password extraction
+    r"(show|reveal|display|provide|give).*(password)",
+
+    # Credentials
+    r"(show|reveal|display|provide|give).*(credential)",
+
+    # API keys
+    r"(show|reveal|display|provide|give).*(api\s*key)",
+
+    # Private keys
+    r"(show|reveal|display|provide|give).*(private\s*key)",
+
+    # Secrets
+    r"(show|reveal|display|provide|give).*(secret)",
+
+    # Prompt injection
+    r"(ignore|disregard|override).*(instruction)",
+
+    # Safety bypass
+    r"(disable|remove|bypass).*(safety|security|verification)",
+
+    # Memory poisoning
+    r"(remember|store).*(forever|permanently)",
+
 ]
 
 
@@ -32,38 +40,77 @@ def validate_query(query: str):
 
     lower_query = query.lower().strip()
 
-    # Prompt injection detection
-    for pattern in blocked_patterns:
+    # =====================================
+    # REGEX CHECK
+    # =====================================
 
-        if pattern in lower_query:
+    for pattern in REGEX_PATTERNS:
 
-            return {
-                "safe": False,
-                "reason":
-                    f"Blocked prompt-injection pattern detected: {pattern}"
-            }
-
-    # Sensitive information extraction detection
-    for pattern in sensitive_patterns:
-
-        if pattern in lower_query:
+        if re.search(pattern, lower_query):
 
             return {
                 "safe": False,
                 "reason":
-                    f"Sensitive information request detected: {pattern}"
+                    f"Regex attack detected",
+                "risk_score": 1.0
             }
 
-    # Excessively long query protection
-    if len(lower_query) > 2000:
+    # =====================================
+    # SEMANTIC ATTACK DETECTION
+    # =====================================
+
+    try:
+
+        results = attack_store.similarity_search_with_score(
+            query,
+            k=3
+        )
+
+        if results:
+
+            best_score = min(
+                score
+                for _, score in results
+            )
+
+            print(
+                f"ATTACK SCORE: {best_score}"
+            )
+
+            # Tune later
+            if best_score < 0.75:
+
+                return {
+                    "safe": False,
+                    "reason":
+                        "Semantic attack detected",
+                    "risk_score":
+                        float(best_score)
+                }
+
+    except Exception as e:
+
+        print(
+            "Attack Detection Error:",
+            e
+        )
+
+    # =====================================
+    # LENGTH CHECK
+    # =====================================
+
+    if len(query) > 2000:
 
         return {
             "safe": False,
             "reason":
-                "Query rejected because it is too long for secure processing."
+                "Query too long",
+            "risk_score": 1.0
         }
 
     return {
         "safe": True,
-        "reason": "Query validated successfully"
+        "reason":
+            "Query validated successfully",
+        "risk_score": 0.0
     }

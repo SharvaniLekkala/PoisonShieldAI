@@ -22,9 +22,11 @@ class GraphState(TypedDict, total=False):
     response: str
     memory_status: str
     status: str
-
+    risk_score: float
     security_status: str
     retrieval_quality: str
+    risk_score: float
+    retrieval_score: float
     
 
 
@@ -49,8 +51,12 @@ def validate_node(state: GraphState) -> GraphState:
         "blocked": False,
         "validated": True,
         "status": "validated",
-        "reason": validation["reason"]
-    }
+        "reason": validation["reason"],
+        "risk_score": validation.get(
+            "risk_score",
+            0.0
+        )
+}
 
 
 # =========================
@@ -88,8 +94,17 @@ def retrieval_node(state: GraphState) -> GraphState:
             "source",
             "memory"
         ),
+
         "retrieved_documents": docs,
+
         "combined_docs": combined_docs,
+
+        "retrieval_score":
+            retrieval_result.get(
+                "retrieval_score",
+                999.0
+            ),
+
         "status": "retrieved"
     }
 
@@ -107,25 +122,66 @@ def trust_node(state: GraphState) -> GraphState:
         )
     )
 
-    if docs_count >= 5:
+    risk_score = float(
+        state.get(
+            "risk_score",
+            0.0
+        )
+    )
+
+    retrieval_score = float(
+        state.get(
+            "retrieval_score",
+            999.0
+        )
+    )
+
+    # -------------------------
+    # SECURITY STATUS
+    # -------------------------
+
+    if risk_score >= 0.8:
+
+        security_status = "BLOCKED"
+
+    elif risk_score >= 0.4:
+
+        security_status = "SUSPICIOUS"
+
+    else:
+
+        security_status = "SAFE"
+
+    # -------------------------
+    # RETRIEVAL QUALITY
+    # -------------------------
+
+    if docs_count == 0:
+
+        retrieval_quality = "LOW"
+
+    elif retrieval_score < 0.5:
+
         retrieval_quality = "HIGH"
 
-    elif docs_count >= 1:
+    elif retrieval_score < 1.0:
+
         retrieval_quality = "MEDIUM"
 
     else:
+
         retrieval_quality = "LOW"
 
-    security_status = (
-        "BLOCKED"
-        if state.get("blocked")
-        else "SAFE"
-    )
-
     return {
-        "security_status": security_status,
-        "retrieval_quality": retrieval_quality,
-        "status": "trusted"
+
+        "security_status":
+            security_status,
+
+        "retrieval_quality":
+            retrieval_quality,
+
+        "status":
+            "trusted"
     }
 
 
@@ -345,7 +401,11 @@ def run_workflow(query: str):
         return {
 
             "status": "blocked",
-
+            "risk_score":
+                result.get(
+                    "risk_score",
+                    0.0
+                ),
             "security_status":
                 result.get(
                     "security_status",
@@ -387,12 +447,18 @@ def run_workflow(query: str):
                     "reason",
                     "Request blocked by validation."
                 )
+            
+            
         }
 
     return {
 
         "status": "success",
-
+        "risk_score":
+            result.get(
+                "risk_score",
+                0.0
+            ),
         "security_status":
             result.get(
                 "security_status",

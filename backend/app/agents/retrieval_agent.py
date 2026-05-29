@@ -38,9 +38,15 @@ def retrieve_data(query: str):
 
             if unique_documents:
 
+                best_score = min(
+                    score
+                    for _, score in results
+                )
+
                 return {
                     "source": "memory",
-                    "documents": unique_documents
+                    "documents": unique_documents,
+                    "retrieval_score": float(best_score)
                 }
 
     except Exception as e:
