@@ -88,7 +88,10 @@ def retrieval_node(state: GraphState) -> GraphState:
     docs = retrieval_result["documents"]
 
     combined_docs = "\n\n".join(docs)
-
+    print("\nRETRIEVED DOCS:")
+    for i, doc in enumerate(docs):
+        print(f"\nDOC {i+1}:")
+        print(doc[:300])
     return {
         "retrieval_source": retrieval_result.get(
             "source",
@@ -107,7 +110,7 @@ def retrieval_node(state: GraphState) -> GraphState:
 
         "status": "retrieved"
     }
-
+        
 
 # =========================
 # TRUST NODE
@@ -156,20 +159,11 @@ def trust_node(state: GraphState) -> GraphState:
     # RETRIEVAL QUALITY
     # -------------------------
 
-    if docs_count == 0:
-
-        retrieval_quality = "LOW"
-
-    elif retrieval_score < 0.5:
-
+    if retrieval_score < 1.2:
         retrieval_quality = "HIGH"
-
-    elif retrieval_score < 1.0:
-
+    elif retrieval_score < 1.5:
         retrieval_quality = "MEDIUM"
-
     else:
-
         retrieval_quality = "LOW"
 
     return {
@@ -228,15 +222,20 @@ def response_node(state: GraphState) -> GraphState:
     
 
     prompt = f"""
+Answer the question using only the context.
+
+Give a short answer.
+
+If the answer is missing, say:
+I do not know.
+
 Context:
 {context}
 
 Question:
 {question}
 
-Answer ONLY using the context above.
-Keep the answer short and accurate.
-Do NOT explain extra information.
+Answer:
 """
     if not state.get("retrieved_documents"):
         return {
@@ -255,16 +254,18 @@ Do NOT explain extra information.
         "provided context"
     ]
 
-    for phrase in blocked_phrases:
+    if (
+    "Context:" in response
+    or "Question:" in response
+):
+        response = (
+        "I do not know based on the provided context."
+    )
+    print("\nFINAL CONTEXT:")
+    print(context)
 
-        if phrase.lower() in response.lower():
-
-            response = (
-                "I do not know based on the provided context."
-            )
-
-            break
-
+    print("\nQUESTION:")
+    print(question)
     return {
         "response": response,
         "status": "answered"

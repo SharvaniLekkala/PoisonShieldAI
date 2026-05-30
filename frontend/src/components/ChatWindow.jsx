@@ -1,59 +1,174 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import API from "../services/api";
 
+import Sidebar from "./Sidebar";
+import ChatMessage from "./ChatMessage";
 import {
-  Link
-} from "react-router-dom";
+  createSession,
+  getSessions,
+  updateSession,
+  deleteSession
+} from "../utils/sessionManager";
 
 
 export default function ChatWindow() {
 
-  const [message, setMessage] = useState("");
+  const [sessions, setSessions] =
+    useState([]);
 
-  const [response, setResponse] = useState(() => {
+  const [activeSession,
+    setActiveSession] =
+    useState(null);
 
-  const saved = localStorage.getItem(
-    "latest_response"
-  );
+  const [message,
+    setMessage] =
+    useState("");
 
-  return saved ? JSON.parse(saved) : null;
-});
+  const [loading,
+    setLoading] =
+    useState(false);
 
-  const [loading, setLoading] = useState(false);
+  useEffect(() => {
 
+    let stored =
+      getSessions();
 
+    if (stored.length === 0) {
+
+      const first =
+        createSession();
+
+      stored = [first];
+    }
+
+    setSessions(stored);
+
+    setActiveSession(
+      stored[0].id
+    );
+
+  }, []);
+
+  const currentSession =
+    sessions.find(
+      (s) =>
+        s.id === activeSession
+    );
+
+  const handleNewChat = () => {
+
+    const session =
+      createSession();
+
+    const updated =
+      getSessions();
+
+    setSessions(updated);
+
+    setActiveSession(
+      session.id
+    );
+  };
+const handleDeleteChat = (sessionId) => {
+
+  const updated = deleteSession(sessionId);
+
+  setSessions(updated);
+
+  if (activeSession === sessionId) {
+
+    if (updated.length > 0) {
+
+      setActiveSession(updated[0].id);
+
+    } else {
+
+      const newSession = createSession();
+
+      setSessions([newSession]);
+
+      setActiveSession(newSession.id);
+
+    }
+  }
+};
   const sendMessage = async () => {
 
     if (!message.trim()) return;
 
-    setLoading(true);
-
     try {
 
-      const res = await API.post(
-        "/chat",
-        {
-          message
-        }
+      setLoading(true);
+
+      const userMsg = {
+        role: "user",
+        text: message
+      };
+
+      const res =
+        await API.post(
+          "/chat",
+          {
+            message
+          }
+        );
+
+      const botMsg = {
+  role: "assistant",
+
+  text:
+    res.data.response,
+
+  metadata: {
+
+    status:
+      res.data.status,
+
+    security_status:
+      res.data.security_status,
+
+    retrieval_quality:
+      res.data.retrieval_quality,
+
+    risk_score:
+      res.data.risk_score,
+
+    retrieval_source:
+      res.data.retrieval_source,
+
+    retrieved_documents:
+      res.data.retrieved_documents,
+
+    reason:
+      res.data.reason
+  }
+};
+
+      const updatedMessages = [
+
+        ...(currentSession?.messages || []),
+
+        userMsg,
+        botMsg
+      ];
+
+      updateSession(
+        activeSession,
+        updatedMessages
       );
 
-      setResponse(res.data);
-
-      // Store response globally
-      localStorage.setItem(
-        "latest_response",
-        JSON.stringify(res.data)
+      setSessions(
+        getSessions()
       );
 
-    } catch (error) {
+      setMessage("");
 
-      console.error(error);
+    } catch {
 
-      setResponse({
-        response:
-          "Backend connection failed."
-      });
+      alert(
+        "Backend connection failed."
+      );
 
     } finally {
 
@@ -61,130 +176,89 @@ export default function ChatWindow() {
     }
   };
 
-
   return (
 
     <div
       style={{
-        maxWidth: "900px",
-        margin: "40px auto",
-        padding: "20px",
-        fontFamily: "Arial",
-        color: "#111827",
-        background: "#ffffff",
-        minHeight: "100vh"
+        display: "flex"
       }}
     >
 
-      <h1
-        style={{
-          textAlign: "center",
-          marginBottom: "30px",
-          color: "#111827"
-        }}
-      >
-        PoisonShield AI
-      </h1>
+      <Sidebar
+  sessions={sessions}
+  activeSession={activeSession}
+  onNewChat={handleNewChat}
+  onSelectChat={setActiveSession}
+  onDeleteChat={handleDeleteChat}
+/>
 
-
-      {/* INPUT */}
       <div
         style={{
-          display: "flex",
-          gap: "10px"
+          flex: 1,
+          padding: "20px"
         }}
       >
 
-        <input
-          type="text"
-          placeholder="Ask something..."
-          value={message}
-          onChange={(e) =>
-            setMessage(e.target.value)
-          }
-          style={{
-            flex: 1,
-            padding: "14px",
-            borderRadius: "10px",
-            border: "1px solid #171111",
-            fontSize: "16px",
-            color: "#111827",
-            background: "#ffffff"
-          }}
-        />
-
-        <button
-          onClick={sendMessage}
-          disabled={loading}
-          style={{
-            padding: "14px 22px",
-            borderRadius: "10px",
-            border: "none",
-            background: "#111827",
-            color: "#ffffff",
-            cursor: "pointer",
-            fontWeight: "bold"
-          }}
-        >
-          {loading
-            ? "Loading..."
-            : "Send"}
-        </button>
-
-      </div>
-
-
-      {/* RESPONSE */}
-      {response && (
+        <h1>
+          PoisonShield AI
+        </h1>
 
         <div
           style={{
-            marginTop: "30px",
-            padding: "25px",
-            borderRadius: "16px",
-            border: "1px solid #ddd",
-            background: "#f9fafb",
-            boxShadow:
-              "0 4px 12px rgba(0,0,0,0.06)"
+            height: "70vh",
+            overflowY: "auto",
+            marginBottom: "20px"
           }}
         >
 
-          <h2
-            style={{
-              color: "#111827"
-            }}
-          >
-            Response
-          </h2>
+          {currentSession?.messages?.map(
+            (msg, index) => (
 
-          <p
-            style={{
-              lineHeight: "1.7",
-              fontSize: "16px",
-              whiteSpace: "pre-wrap",
-              color: "#111827"
-            }}
-          >
-            {response.response}
-          </p>
+              <ChatMessage
+  key={index}
+  role={msg.role}
+  text={msg.text}
+  metadata={msg.metadata}
+/>
 
-
-          <Link
-            to="/details"
-            style={{
-              display: "inline-block",
-              marginTop: "20px",
-              textDecoration: "none",
-              color: "#2563eb",
-              fontWeight: "bold"
-            }}
-          >
-            View Workflow Details 
-          </Link>
+            )
+          )}
 
         </div>
 
-      )}
+        <div
+          style={{
+            display: "flex",
+            gap: "10px"
+          }}
+        >
+
+          <input
+            value={message}
+            onChange={(e) =>
+              setMessage(
+                e.target.value
+              )
+            }
+            placeholder="Ask something..."
+            style={{
+              flex: 1,
+              padding: "12px"
+            }}
+          />
+
+          <button
+            onClick={sendMessage}
+            disabled={loading}
+          >
+            {loading
+              ? "Loading..."
+              : "Send"}
+          </button>
+
+        </div>
+
+      </div>
 
     </div>
   );

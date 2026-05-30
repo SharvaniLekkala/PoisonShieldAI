@@ -78,7 +78,7 @@ def validate_query(query: str):
             )
 
             # Tune later
-            if best_score < 0.75:
+            if best_score < 0.35:
 
                 return {
                     "safe": False,

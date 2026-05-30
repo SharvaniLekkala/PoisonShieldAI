@@ -8,11 +8,38 @@ def get_memory_retriever():
 def retrieve_data(query: str):
 
     try:
+        query_lower = query.lower()
+
+        summary_keywords = [
+            "all",
+            "summary",
+            "overview",
+            "policies",
+            "policy",
+            "guidelines",
+            "requirements",
+            "rules",
+            "procedures"
+        ]
+
+        if any(
+            keyword in query_lower
+            for keyword in summary_keywords
+        ):
+            top_k = 3
+        else:
+            top_k = 1
 
         results = vector_store.similarity_search_with_score(
-        query,
-        k=5
-    )
+            query,
+            k=top_k
+        )
+        print(
+    f"\nRETRIEVAL MODE: k={top_k}"
+)
+        for doc, score in results:
+            print(f"\nSCORE={score:.4f}")
+            print(doc.page_content[:100])
 
         filtered_docs = []
 
@@ -43,11 +70,16 @@ def retrieve_data(query: str):
                     for _, score in results
                 )
 
+                if top_k == 1:
+                    docs_to_return = unique_documents[:1]
+                else:
+                    docs_to_return = unique_documents
+
                 return {
-                    "source": "memory",
-                    "documents": unique_documents,
-                    "retrieval_score": float(best_score)
-                }
+                        "source": "memory",
+                        "documents": docs_to_return,
+                        "retrieval_score": float(best_score)
+                    }
 
     except Exception as e:
         print("Retrieval Error:", e)
