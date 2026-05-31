@@ -27,7 +27,8 @@ class GraphState(TypedDict, total=False):
     retrieval_quality: str
     risk_score: float
     retrieval_score: float
-    
+    memory_type: str
+    memory_importance: float
 
 
 # =========================
@@ -278,18 +279,26 @@ Answer:
 # MEMORY NODE
 # =========================
 
-def memory_node(
-    state: GraphState
-) -> GraphState:
+from app.agents.memory_classifier_agent import classify_memory
 
+def memory_node(state):
+
+    query = state["query"]
+
+    classification = classify_memory(query)
+
+    memory_type = classification["memory_type"]
+
+    importance = classification["importance"]
+    print("\nMEMORY CLASSIFICATION:")
+    print(classification)
     return {
-        "memory_status":
-            "Memory storage disabled",
-
-        "status":
-            "memory_skipped"
+        "memory_type": memory_type,
+        "memory_importance": importance,
+        "memory_status": f"Classified as {memory_type}",
+        "status": "memory_classified"
     }
-
+    
 
 # =========================
 # GRAPH SETUP
